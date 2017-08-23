@@ -1,0 +1,31 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "geerlingguy/ubuntu1604"
+
+  # Create a private network, which allows host-only access to the machine
+  # using a specific IP.
+  config.vm.network "private_network", ip: "10.0.0.41"
+
+  dataDisk2 = './dataDisk2.vdi'
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "4096"
+
+    # Building disk files if they don't exist
+    if not File.exists?(dataDisk2)
+      vb.customize ['createhd', '--filename', dataDisk2, '--variant', 'Fixed', '--size', 10 * 1024]
+
+      # Adding a SATA controller that allows 4 hard drives
+      vb.customize ['storagectl', :id, '--name', 'SATA Controller', '--add', 'sata', '--portcount', 4]
+      # Attaching the disks using the SATA controller
+      vb.customize ['storageattach', :id,  '--storagectl', 'SATA Controller', '--port', 1, '--device', 0, '--type', 'hdd', '--medium', dataDisk2]
+    end
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo mkfs.ext4 /dev/sdb
+  SHELL
+
+end
