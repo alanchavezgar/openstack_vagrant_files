@@ -255,3 +255,17 @@ openstack  container list [--long] [--all]
 
 Hacer una copia local del contenedor
 $ openstack container save <nombre del contenedor>
+
+
+### Administración de objetos
+Crear objetos
+$ openstack object create [--name <nombre>] <contenedor> <archivo>
+
+Eliminar objetos
+$ openstack object delete <contenedor> <objeto>
+
+Listar objetos
+$ openstack object list [--long] [-all] <contenedor>
+
+Hacer una copia local del objeto
+$ openstack object save [--file <archivo>] <contenedor> <objeto>
