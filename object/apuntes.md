@@ -1,5 +1,5 @@
-# NODOS DE ALMACENAMIENTO
-## Se hace la instalación en todos
+## NODOS DE ALMACENAMIENTO
+### Se hace la instalación en todos
 
 _En los nodos de almacenamiento:_
 
@@ -7,13 +7,13 @@ Prerequisitos:
 1. Se instalan los paquetes y utilerias de soporte
 
 ```
-apt-get install xfsprogs rsync
+$ apt-get install xfsprogs rsync
 ```
 
 2. Se le da formato a los discos que no son de sistema
 ```
-mkfs.xfs /dev/sdb
-mkfs.xfs /dev/sdc
+$ mkfs.xfs /dev/sdb
+$ mkfs.xfs /dev/sdc
 ```
 
 3. Se crean  los puntos de montaje para los discos
@@ -28,7 +28,7 @@ $ mount /srv/node/sdb
 $ mount /srv/node/sdc
 ```
 
-5. Crear o editar el archivo /etc/rsyncd.conf con el siguiente contenido
+5. Crear o editar el archivo `/etc/rsyncd.conf` con el siguiente contenido
 
 ``` conf
 uid = swift
@@ -58,23 +58,32 @@ lock file = /var/lock/object.lock
 
 En los nodos de almacenamiento
 
-6. Editar el archivo /etc/default/rsync
+6. Editar el archivo `/etc/default/rsync`
+```
 RSYNC_ENABLE = true
+```
 
 7. Iniciar el servicio rsync
-service rsync start
+``` bash
+$ service rsync start
+```
 
-En los nodos de almacenamiento
+**En los nodos de almacenamiento**
 
 1. Instalar los componentes
-apt-get install swift swift-account swift-container swift-object
+``` bash
+$ apt-get install swift swift-account swift-container swift-object
+```
 
 2.Descargar las configuraciones desde el repositorio de swift
+``` bash
 $ curl -o /etc/swift/account-server.conf https://git.openstack.org/cgit/openstack/swift/plain/etc/account-server.conf-sample?h=stable/ocata
 $ curl -o /etc/swift/container-server.conf https://git.openstack.org/cgit/openstack/swift/plain/etc/container-server.conf-sample?h=stable/ocata
 $ curl -o /etc/swift/object-server.conf https://git.openstack.org/cgit/openstack/swift/plain/etc/object-server.conf-sample?h=stable/ocata
+```
 
-3. Editar el archivo /etc/swift/account-server.conf
+3. Editar el archivo `/etc/swift/account-server.conf`
+```
 [DEFAULT]
 bind_ip = MANAGEMENT_INTERFACE_IP_ADDRESS
 bind_port = 6002
@@ -105,8 +114,10 @@ pipeline = healthcheck recon container-server
 [filter:recon]
 use = egg:swift#recon
 recon_cache_path = /var/cache/swift
+```
 
-5. Editar el archivo /etc/swift/object-server.conf
+5. Editar el archivo `/etc/swift/object-server.conf`
+```
 [DEFAULT]
 bind_ip = MANAGEMENT_INTERFACE_IP_ADDRESS
 bind_port = 6000
@@ -122,88 +133,81 @@ pipeline = healthcheck recon object-server
 use = egg:swift#recon
 recon_cache_path = /var/cache/swift
 recon_lock_path = /var/lock
+```
 
-6. Cambiar los permisos al directorio /srv/node
+6. Cambiar los permisos al directorio `/srv/node`
+``` bash
 $ chown -R swift:swift /srv/node
+```
 
 7. Crear el directorio recon y asegurar que tiene los permisos correctos.
+``` bash
 $ mkdir -p /var/cache/swift
 $ chown -R root:swift /var/cache/swift
 $ chmod -R 755 /var/cache/swift
+```
 
-### CONTROLADOR ###
-De regreso en el nodo controlador
-Crear y distribuir los anillos iniciales
+
+**CONTROLADOR**
+
+* Crear y distribuir los anillos iniciales
 
 1. Cambiar el directorio de trabajo a /etc/swift
 
 2. Crear el archivo base account.builder:
+``` bash
 $ swift-ring-builder account.builder create 10 3 1
+```
 
-10 = cantidad de particiones
-3 = numero de replicas
-1 = tiempo entre replicas
+numero | significado
+---|---
+10 | cantidad de particiones |
+3  | numero de replicas      |
+1  | tiempo entre replicas   |
 
 3. Agregar los nodos al anillo
+``` bash
 $ swift-ring-builder account.builder add --region 1 --zone 1 --ip 10.0.0.51 --port 6002 --device sdb --weight 100
 $ swift-ring-builder account.builder add --region 1 --zone 1 --ip 10.0.0.51 --port 6002 --device sdc --weight 100
 $ swift-ring-builder account.builder add --region 1 --zone 2 --ip 10.0.0.52 --port 6002 --device sdb --weight 100
 $ swift-ring-builder account.builder add --region 1 --zone 2 --ip 10.0.0.52 --port 6002 --device sdc --weight 100
+```
 
-Crear y distribuir los anillos iniciales
-4.
-swift-ring-builder account.builder
+**Crear y distribuir los anillos iniciales**
+4. Verificar el contenido del anillo
+``` bash
+$ swift-ring-builder account.builder
+```
 
-5.
+5. Se rebalancea el anillo
+``` bash
 swift-ring-builder account.builder rebalance
+```
 
-### Repetir desde el punto 2 para container y object decrementando los el puerto
+**Repetir desde el punto 2 para container y object decrementando los puertos hasta el :6000 en los anillos container.builder y account.builder**
 
-6. Crear el archivo base container.builder
-$ swift-ring builder container.builder create 10 3 1
+Anillo    | Puerto
+----------|-------
+account   |6002
+container |6001
+object    |6000
 
-7. Agregar los nodos al anillo
-$ swift-ring-builder container.builder add --region 1 --zone 1 --ip 10.0.0.51 --port 6001 --device sdb --weight 100
-$ swift-ring-builder container.builder add --region 1 --zone 1 --ip 10.0.0.51 --port 6001 --device sdc --weight 100
-$ swift-ring-builder container.builder add --region 1 --zone 2 --ip 10.0.0.52 --port 6001 --device sdb --weight 100
-$ swift-ring-builder container.builder add --region 1 --zone 2 --ip 10.0.0.52 --port 6001 --device sdc --weight 100
-
-8.
-swift-ring-builder account.builder rebalance
-
-9. Crear el archivo base container.builder
-$ swift-ring builder container.builder create 10 3 1
-
-10.
-$ swift-ring builder object.builder create 10 3 1
-
-11.
-$ swift-ring-builder object.builder add --region 1 --zone 1 --ip 10.0.0.51 --port 6001 --device sdb --weight 100
-$ swift-ring-builder object.builder add --region 1 --zone 1 --ip 10.0.0.51 --port 6001 --device sdc --weight 100
-$ swift-ring-builder object.builder add --region 1 --zone 2 --ip 10.0.0.52 --port 6001 --device sdb --weight 100
-$ swift-ring-builder object.builder add --region 1 --zone 2 --ip 10.0.0.52 --port 6001 --device sdc --weight 100
-
-12. Verificar el contenido del anillo
-$ swift-ring-builder object.builder
-
-13. Se rebalancea el anillo
-$ swift-ring-builder object.builder rebalance
-
-TODO: Copiar los  archivos deeste paso
 14. Distribuir los archivos account.ring.gz, container.ring.gz y object.ring.gz
-en el directorio /etc/swift de los nodos de almacenamiento de objetos.
+en el directorio `/etc/swift` de los nodos de almacenamiento de objetos.
 
-#### 5. Instalación y administración del almacenamiento de objetos.
-##### Componentes del servicio
+### 5. Instalación y administración del almacenamiento de objetos.
 
-    -- Proxy servers
-    -- Anillos
-    -- Zonas
-    -- Cuentas y contenedores
-    -- Objetos
-    -- Particiones
+Componentes del servicio|
+------------------------|
+Proxy servers           |
+Anillos                 |
+Zonas                   |
+Cuentas y contenedores  |
+Objetos                 |
+Particiones             |
 
-#### NODO CONTROLADOR ####
+**NODO CONTROLADOR**
+
 Finalizar la instalación
 15. Obtener el archivo de configuración de swift
 ```
@@ -211,6 +215,7 @@ $ curl -o /etc/swift/swift.conf https://git.openstack.org/cgit/openstack/swift/p
 ```
 
 16. Editar el archivo swift.conf
+```
 [swift-hash]
 swift_hash_path_suffix = HASH_PATH_SUFFIX
 swift_hash_path_prefix = HASH_PATH_PREFIX
@@ -218,73 +223,114 @@ swift_hash_path_prefix = HASH_PATH_PREFIX
 [storage-policy:0]
 name = Policy-0
 default = yes
+```
 
 17. Copiar el archivo de configuración swift.conf a todos los nodos en la misma ubicación
-/etc/swift/swift.conf
+`/etc/swift/swift.conf`
 
 18. En todos los nodos asegurarse de que /etc/swift tiene los permisos correctos
+``` bash
 $ chown -R root:swift /etc/swift
+```
 
 19. En el controlador reinicar los servicios memcached y swift proxy
+``` bash
 $ service memcached restart
 $ service swift-proxy restart
+```
 
 20. En los nodos de almacenamiento iniciar el servicio de swift
+``` bash
 $ swift-init all start
+```
 
-### NODO CONTROLADOR ###
+**NODO CONTROLADOR**
 
 21. Cargar las variables de ambiente para adminsitrador
+
 22. Mostrar el estado del servicio
+``` bash
 $ swift stat
+```
 
 23. Crear un contenedor
+``` bash
 $ openstack container create container1
+```
 
 24. Almacenar un archivo de prueba en el contenedor
+``` bash
 $ openstack object create container1 FILE
+```
 
 25. Listar los objetos almacenados en container 1
+``` bash
 $ openstack object list container 1
+```
 
 26. Descargar el archivo desde el contenedor
+``` bash
 $ openstack object save container1 FILE
+```
 
 ### Administración de anillos
+
 Listar el contenido de un archivo de definición de anillo
+```
 $ swift-ring-builder <nombre del archivo de anillo>
+```
 
 Agregar un nodo a un anillo
+```
 $ swift-ring-builder <nombre del archivo de anillo> add --region <región> --zone <zona> --ip <dirección ip> --port <puerto> --device <dispositivo> --weight <peso>
+```
 
 Crear anillo
+```
 $ swift-ring-builder create <nombre del archivo de anillo> <capacidad de particiones> <replicas> <horas>
+```
 
 Crear contenedores
+```
 $ openstack container create <nombre del contenedor>
+```
 
 Eliminar contenedor
+```
 $ openstack container delete [--recursive] <container> [<container> ...]
+```
 
 Listar contenedores
-openstack  container list [--long] [--all]
+```
+$ openstack  container list [--long] [--all]
+```
 
 Hacer una copia local del contenedor
+```
 $ openstack container save <nombre del contenedor>
+```
 
 
 ### Administración de objetos
 Crear objetos
+```
 $ openstack object create [--name <nombre>] <contenedor> <archivo>
+```
 
 Eliminar objetos
+```
 $ openstack object delete <contenedor> <objeto>
+```
 
 Listar objetos
+```
 $ openstack object list [--long] [-all] <contenedor>
+```
 
 Hacer una copia local del objeto
+```
 $ openstack object save [--file <archivo>] <contenedor> <objeto>
+```
 
 ##### CEILOMETER
 
@@ -331,13 +377,11 @@ $ apt-get install gnocchi-api gnocchi-metricd gnocchi-common python-gnocchi.
 
 #### Crear el servicio ceilometer
 Instalación y configuración de los componentes ceilometer
-
 ```
 $ apt-get install ceilometer-collector ceilometer-agent-central ceilometer-agent-notification python-ceilometerclient
 ```
 
 2. Editar el archivo /etc/ceilometer/ceilometer.conf
-
 ```
 [default]
 meter_dispatchers = gnocchi
@@ -576,7 +620,7 @@ $ service cinder-volume restart
 #### De regreso al controlador
 * Configurar glance para usar telemetría
 
-1. Editar el archivo /etc/glance/glance.api.conf y /etc/glance/glance-registry.conf
+1. Editar el archivo `/etc/glance/glance.api.conf` y `/etc/glance/glance-registry.conf``
 ```
 [DEFAULT]
 transport_url = rabbit://openstack:RABBIT_PASS@controller
@@ -592,7 +636,7 @@ $ service glance-api restart
 ```
 
 * Configurar neutron para usar telemetría
-1. Editarelarchivo /etc/neutron/neutron.conf
+1. Editar el archivo `/etc/neutron/neutron.conf`
 ``` bash
 [oslo_messaging_notifications]
 driver = messagingv2
@@ -621,7 +665,7 @@ $ apt-get install python-ceilometermiddleware
 ```
 
 * En el nodo controladory encualquier nodo  de almacén de objetos
-1. Editar el archivo /etc/swift/proxyserver.conf
+1. Editar el archivo `/etc/swift/proxyserver.conf`
 ```
 [filter:keystoneauth]
 Operator_roles = admin, useer, ResellerAdmin
@@ -629,3 +673,143 @@ Operator_roles = admin, useer, ResellerAdmin
 [pipeline:main]
 pipeline = catch_errors gat...
 ```
+
+1. Editar el archivo `/etc/swift/proxyserver.conf`
+
+[filter:ceilometer]
+paste.filter_factory = ceilometermiddleware.swift:filter_factory
+control_exchange = swift
+url = rabbit://openstack:RABBIT_PASS@controller:5672/
+driver = messagingv2
+topic = notifications
+log_level = WARN
+
+2. Reiniciar el servicio swift-proxy
+``` bash
+$ service swift-proxy restart
+```
+
+#### Descargar el archivo de configuración de gnocchi.conf
+``` bash
+https://github.com/TSDBBench/Overlord/blob/master/vagrant_files/gnocchi_cl1/files/gnocchi.conf
+```
+
+* ### Servicio de alarma (aodh)
+* Configurar el servicio de aodh
+
+1. Se crea la base de datos para el servicio.
+``` sql
+CREATE DATABASE aodh;
+```
+
+2. Se crea un usuario y se asignan los permisos a la base de datos recién creada
+``` sql
+GRANT ALL PRIVILEGES ON aodh.* TO 'aodh'@'localhost' IDENTIFIED BY 'AODH_DBPASS';
+GRANT ALL PRIVILEGES ON aodh.* TO 'aodh'@'%' IDENTIFIED BY 'AODH_DBPASS';
+```
+
+3. Se crea el usuario de openstack para controlar el servicio
+``` bash
+$ openstack user create --domain default --password-prompt aodh
+```
+
+4. Agregar el rol de admin al usuario
+``` bash
+$ openstack role add --project service --user aodh admin
+```
+
+5. Se crea el servicio para aodh
+``` bash
+$ openstack service create --name aodh --description "Telemetria" alarming
+```
+
+* Instalar y configurar los componentes
+1. Instalar los paquetes del servicio
+``` bash
+$ apt-get install aodh-api aodh-evaluator aodh-notifier aodh-listener aodh-expirer python-aodhclient
+```
+
+2. Editar el archivo `/etc/aodh/aodh.conf`
+```
+[database]
+connection = mysql+pymysql://aodh:AODH_DBPASS@controller/aodh
+
+[DEFAULT]
+transport_url = rabbit://openstack:RABBIT_PASS@controller
+auth_strategy = keystone
+
+[keystone_authtoken]
+auth_uri = http://controller:5000
+auth_url = http://controller:35357
+memcached_servers = controller:11211
+auth_type = password
+project_domain_name = default
+user_domain_name = default
+project_name = service
+username = aodh
+password = AODH_PASS
+
+[service_credentials]
+auth_type = password
+auth_url = http://controller:5000/v3
+project_domain_name = default
+user_domain_name = default
+project_name = service
+username = aodh
+password = AODH_PASS
+interface = internalURL
+region_name = RegionOne
+```
+
+3. Inicializar la base de datos
+``` bash
+aodh-dbsync
+```
+
+3.  Reiniciar los servicios de alarma
+``` bash
+$ service aodh-api restart
+$ service aodh-evaluator restart
+$ service aodh-notifier restart
+$ service aodh-listener restart
+```
+
+* Buenas practicas
+``` html
+https://demo.marpi.pl/codeology/
+```
+
+``` bash
+ceilometer sample-list --meter cpu --q 'resource_id=INSTANCE_ID_1;timestamp > 2017-08-01T00:00:00;timestamp > 2017-08-01T00:00:00'
+```
+
+* Crear alarmas
+``` bash
+$ aodh alarm create
+```
+
+* Mostrar historial de alarmas
+``` bash
+aodh alarm-history show ALARM_ID
+```
+
+* Eliminar una alarma
+``` bash
+aodh alarm update --enabled False ALARM_ID
+aodh alarm deleted ALARM_ID
+```
+
+**Niveles de seguridad**
+
+* Seguridad fisica
+  * Control de acceso
+  * Energia electrica
+  * Instalaciones y mobiliario
+  * Inmueble
+
+
+* Seguridad logica
+  * Seguridad del sistema operativo
+  * Seguridad del usuario
+  * Seguridad de comunicaciones (redes)
+  * Seguridad de aplicaciones
