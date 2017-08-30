@@ -597,7 +597,7 @@ driver = messagingv2
 
 2. Habilitar el uso  periódico de estadisticas relacionadas con cinder
 ###### Solamente en el nodo de almacenamiento de bloques
-```
+``` bash
 $ cinder-volume-usage-audit --start time='YYYY-MM-DD HH:MM:SS' --end-time='YYYY-MM-DD HH:MM:SS' --send_actions
 ```
 Para obtener estos valores en forma periodica se debe colocar en el cron cada 5 minutos
@@ -801,9 +801,9 @@ aodh alarm deleted ALARM_ID
 
 **Niveles de seguridad**
 
-* Seguridad fisica
+* Seguridad física
   * Control de acceso
-  * Energia electrica
+  * Energia eléctrica
   * Instalaciones y mobiliario
   * Inmueble
 
@@ -813,3 +813,186 @@ aodh alarm deleted ALARM_ID
   * Seguridad del usuario
   * Seguridad de comunicaciones (redes)
   * Seguridad de aplicaciones
+
+
+### 7. Servicios de administración continua
+
+* Vulnerabilidades
+  * OSSA
+  * OSSN
+  * Triage
+  * Actualizaciones
+* Configuraciones
+  * Chef
+  * Puppet
+  * Salt Stack
+  * Ansible
+  * Politicas de cambio
+* Respaldo de recuperacion
+* Auditoría
+
+* #### Integridad del ciclo de vida
+* Arranque seguro
+  * Aprovisionamiento de nodos
+  * Verificación de Arranque
+  * Fortalecimiento de la Seguridad
+    * Estándares
+      * STIG
+      * CIS
+    * Herramientas de software semi automatizadas
+      * OpenSCAP
+      * Ansible-hardening
+    * Nada como el trabajo en casa
+      * Verificar usuarios y permisos
+      * Eliminar o detener los paquetes que no se utilicen
+      * Políticas de sólo lectura (sólo permitir la escritura en lo que se debe)
+* Verificación de runtime
+  * Detección de intrusos
+    * En el sistema
+      * OSSEC
+      * Samhain
+      * Tripwire
+      * AIDE
+    * En las redes
+      * Snort
+* Fortalecimiento del servidor
+  * Verificación de la Integridad de dispositivos de almacenamiento
+  * Verificación de la integridad de archivos
+
+* Seguridad de labase de datos
+  * Recomendaciones
+    * Todas las basesde datos deben de estar aisladas de la red de administración
+    * Se recomienda el uso de TLS para la comunicación entre nodos sql_connection =
+    mysql://compute01:NOVA_DBPASS@localhost/nova?charset=utf8&ssl_ca=/etc/mysql/cacert.pem
+    * Crear una sola cuenta para cada base de datos involucrada en openstack
+    * En medida de lo posible hacer que los administradores se debar conectar usando protocolo seguro
+    GRANT ALL ON dbname.* TO 'usuario'@'cliente' IDENTIFIED BY 'contraseña' REQUIRE SLL;
+
+* Seguridad de la cola de mensajes
+  * Se edita rabbitmq.config
+  ```
+  [
+    {rabbit, [
+      {tcp_listeners, [] },
+      {ssl_listeners, [{"<IP address or hostname og management network interface>", 5671}] },
+      {ssl_options, [{ blah blah blah }]}
+      ]}
+  ]
+  ```
+  * En los archivos de configuración que lo requieran
+  ```
+  [DEFAULT]
+  rpc_backend =
+  ```
+
+* Seguridad de instancias
+  * Imágenes seguras
+  * Asignación de recursos
+  * Migración de instancias
+  * Monitoreo, alerta y reporte
+  * Actualizaciones y parches
+  * Controles de seguridad perimetral
+
+# Arquitectura de redes
+  * Elementos físicos
+    * Switches
+    * Ruteadores
+    * Firewalls
+    * Balanceadores de carga
+  * Elementos lógicos
+    * Protocolos
+    * Túneles
+    * NAT
+
+* ### Comandos de administración de redes virtuales
+  * Crear tipos de direcciones
+  ``` bash
+  $ openstack address scope create --share --ip-version 6 --address-scope-ip6 6
+  $ openstack address scope create --share --ip-version 4 --address-scope-ip4 4
+  ```
+
+  * Crear una subred
+  ``` bash
+  $ openstack subnet pool create --address-scope-ip4 \
+  --share --pool-prefix 203.0.113.0/24 --default-prefix-length 26 \
+  subnet-pool-ip4
+
+  $ openstack subnet pool create --address-scope address-scope-ip4 \
+  --share --pool-prefix 203.0.113.0/24 --default-prefix-length 26 \
+  subnet-pool-ip4
+  ```
+
+  * Verificar la red creada públicamente
+  ``` bash
+  $ openstack subnet show public-subnet
+  ```
+
+  * Creación de redes
+  ``` bash
+  $ openstack network create network1
+  $ openstack network create network2
+  ```
+
+  * Crear una subred no asociada a redes públicas
+  ``` bash
+  $ openstack subnet create --network network1 --subnet-range \
+  198.51.100.0/26 subnet-ip4-1
+  ```
+
+  * Crear una subred asociada con una red pública
+  ``` bash
+  $ openstack subnet create --subnet-pool subnet-pool-ip4 \
+  --network network2 subnet-ip4-2
+  ```
+
+  * Crear los ruteadores virtuales para cada subred
+  ``` bash
+  $ openstack router add subnet router 1 subnet-ip4-1
+  $ openstack router add subnet router 1 subnet-ip4-2
+  $ openstack router add subnet router 1 subnet-ip6-1
+  $ openstack router add subnet router 1 subnet-ip6-2
+  ```
+
+  * Se crea la red
+  ``` bash
+  $ neutron net-create --shared --provider:physical_network provider \
+  --provider:network_type flat provider
+  ```
+
+  * Se crea la subred
+  ``` bash
+  $ neutron subnet-create --name provider \
+  --allocation-pool start=203.0.113.101,end=203.0.113.250 \
+  --dns-nameserver 8.8.4.4 --gateway 203.0.113.1 \
+  provider 203.0.113.0/24
+  ```
+
+  * Crear sabores
+
+  * Evacuación de instancias
+    * En caso de una falla que haga fallar al nodo compute donde se aloja una  instancia esta se puede evacuar
+    ``` bash
+    $ nova evacuate NOMBRE_DEL_SERVIDOR [NOMBRE_DEL_HOST]
+    ```
+    Si no se pone el nombre del servidor, nova scheduler decide donde evacuarlo
+
+  * Otras operaciones sobre las instancias
+    * Crear un servidor
+    ``` bash
+    $ openstack server create ...
+    ```
+
+    * Agregar un volumen al servidor
+    ``` bash
+    $ openstack server add volume [--device <device>] <server> <volume>
+    ```
+
+    * Pausar un servidor
+    ``` bash
+    $ openstack server pause <server> [<server> ...]
+    ```
+
+    * Retirar un volumen
+     ``` bash
+     $ openstack server remove volume <server> <volume>
+     ```
